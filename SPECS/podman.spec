@@ -25,7 +25,7 @@ GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback $
 Epoch: 2
 Name: podman
 Version: 4.0.2
-Release: 6%{?dist}
+Release: 7%{?dist}
 Summary: Manage Pods, Containers and Container Images
 License: ASL 2.0 and GPLv3+
 URL: https://%{name}.io/
@@ -67,7 +67,8 @@ BuildRequires: file
 BuildRequires: gcc
 BuildRequires: libtool
 Requires: containers-common >= 2:1-27
-Requires: containernetworking-plugins >= 0.9.1-1
+Suggests: containernetworking-plugins >= 0.9.1-1
+Requires: netavark
 Requires: iptables
 Requires: nftables
 Obsoletes: oci-systemd-hook < 1
@@ -414,6 +415,10 @@ exit 0
 %{_libexecdir}/%{name}/gvproxy
 
 %changelog
+* Thu May 19 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.2-7
+- require netavark and make CNI optional via soft-deps
+- Related: #2088182
+
 * Fri Apr 01 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.2-6
 - rebuild because of malfunctional gating
 - Related: #2067526
