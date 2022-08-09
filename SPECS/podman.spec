@@ -1,31 +1,25 @@
 %global with_check 0
 
-# https://bugzilla.redhat.com/show_bug.cgi?id=1904567
-%global _lto_cflags %{nil}
-
-%global _find_debuginfo_dwz_opts %{nil}
-%global _dwz_low_mem_die_limit 0
-
 %define gobuild(o:) \
 GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback ${BUILDTAGS:-}" -ldflags "${LDFLAGS:-} -linkmode=external -compressdwarf=false -B 0x$(head -c20 /dev/urandom|od -An -tx1|tr -d ' \\n') -extldflags '%__global_ldflags'" -a -v %{?**};
 
 %global import_path github.com/containers/podman
-%global branch v4.0-rhel
-%global commit0 3d24a66f0dccc7cbf62dfb2d406409c88a568cdf
+%global branch v4.1.1-rhel
+%global commit0 fa692a6b4a1131c76eb3d5beacb155855e733785
 %global shortcommit0 %(c=%{commit0}; echo ${c:0:7})
 %global cataver 0.1.7
 #%%global dnsnamever 1.3.0
 %global commit_dnsname 18822f9a4fb35d1349eb256f4cd2bfd372474d84
 %global shortcommit_dnsname %(c=%{commit_dnsname}; echo ${c:0:7})
 %global gvproxyrepo gvisor-tap-vsock
-%global gvproxyver 0.1.0
+%global gvproxyver 0.2.0
 %global commit_mcni 0749884b8d1a455c68da30789e37811ec0809d51
 %global shortcommit_mcni %(c=%{commit_mcni}; echo ${c:0:7})
 
 Epoch: 2
 Name: podman
-Version: 4.0.2
-Release: 7%{?dist}
+Version: 4.1.1
+Release: 1%{?dist}
 Summary: Manage Pods, Containers and Container Images
 License: ASL 2.0 and GPLv3+
 URL: https://%{name}.io/
@@ -72,11 +66,11 @@ Requires: netavark
 Requires: iptables
 Requires: nftables
 Obsoletes: oci-systemd-hook < 1
-Requires: libseccomp >= 2.4.1
+Requires: libseccomp >= 2.5
 Requires: conmon >= 2.0.25
 Requires: (container-selinux if selinux-policy)
 Requires: slirp4netns >= 0.4.0-1
-Requires: runc >= 1.0.0-57
+Recommends: crun
 Requires: fuse-overlayfs
 Requires: %{name}-catatonit >= %{epoch}:%{version}-%{release}
 Requires: oci-runtime
@@ -149,6 +143,7 @@ file.  Each CNI network will have its own dnsmasq instance.
 %package tests
 Summary: Tests for %{name}
 Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: %{name}-plugins = %{epoch}:%{version}-%{release}
 #Requires: bats  (which RHEL8 doesn't have. If it ever does, un-comment this)
 Requires: nmap-ncat
 Requires: httpd-tools
@@ -181,6 +176,7 @@ dynamic port forwarding.
 %autosetup -Sgit -n %{name}-%{commit0}
 %endif
 sed -i 's;@@PODMAN@@\;$(BINDIR);@@PODMAN@@\;%{_bindir};' Makefile
+sed -i 's,-Werror,,' pkg/rootless/rootless_linux.go
 tar fx %{SOURCE1}
 pushd catatonit-%{cataver}
 sed -i '$d' configure.ac
@@ -415,33 +411,41 @@ exit 0
 %{_libexecdir}/%{name}/gvproxy
 
 %changelog
-* Thu May 19 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.2-7
-- require netavark and make CNI optional via soft-deps
-- Related: #2088182
+* Wed Jul 27 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.1.1-1
+- update to the latest content of https://github.com/containers/podman/tree/v4.1.1-rhel
+  (https://github.com/containers/podman/commit/fa692a6)
 
-* Fri Apr 01 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.2-6
-- rebuild because of malfunctional gating
-- Related: #2067526
+* Mon May 23 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.1.0-4
+- don't require runc and Recommends: crun
+- Related: #2061316
 
-* Wed Mar 30 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.2-5
-- update to the latest content of https://github.com/containers/podman/tree/v4.0-rhel
-  (https://github.com/containers/podman/commit/3d24a66)
-- Resolves: #2067526
+* Fri May 13 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.1.0-3
+- Re-enable LTO and debuginfo
+- Related: #2061316
 
-* Thu Mar 24 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.2-4
-- update to the latest content of https://github.com/containers/podman/tree/v4.0-rhel
-  (https://github.com/containers/podman/commit/bb1e6e6)
-- Resolves: #2066501
+* Wed May 11 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.1.0-2
+- update gvisor-tap-vsock to 0.2.0 to fix compilation with golang 1.18
+- Related: #2061316
 
-* Mon Mar 21 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.2-3
-- rebuild with golang >= 1.17.5 (CVE-2021-44716, CVE-2021-44717)
-- rebuild with golang >= 1.17.7 to fix FIPS issues
-- Related: #1975396
+* Mon May 09 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.1.0-1
+- update to https://github.com/containers/podman/releases/tag/v4.1.0
+- Related: #2061316
 
-* Tue Mar 15 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.2-2
-- update to the latest content of https://github.com/containers/podman/tree/v4.0-rhel
-  (https://github.com/containers/podman/commit/9237d75)
-- Related: #2062835
+* Tue May 03 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.3-2
+- require netavark and move CNI to soft dependencies
+- Related: #2061316
+
+* Fri Apr 01 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.3-1
+- update to https://github.com/containers/podman/releases/tag/v4.0.3
+- Related: #2061316
+
+* Fri Mar 18 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.2-3
+- bump minimal libseccomp version requirement
+- Related: #2061316
+
+* Mon Mar 14 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.2-2
+- rebuilt with golang >= 1.17.5 (CVE-2021-44716, CVE-2021-44717)
+- Related: #2061316
 
 * Wed Mar 02 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.0.2-1
 - update to https://github.com/containers/podman/releases/tag/v4.0.2
