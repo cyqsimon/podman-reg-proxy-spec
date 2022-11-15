@@ -4,8 +4,8 @@
 GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback ${BUILDTAGS:-}" -ldflags "${LDFLAGS:-} -linkmode=external -compressdwarf=false -B 0x$(head -c20 /dev/urandom|od -An -tx1|tr -d ' \\n') -extldflags '%__global_ldflags'" -a -v %{?**};
 
 %global import_path github.com/containers/podman
-%global branch v4.1.1-rhel
-%global commit0 fa692a6b4a1131c76eb3d5beacb155855e733785
+#%%global branch v4.1.1-rhel
+%global commit0 7fe5a419cfd2880df2028ad3d7fd9378a88a04f4
 %global shortcommit0 %(c=%{commit0}; echo ${c:0:7})
 %global cataver 0.1.7
 #%%global dnsnamever 1.3.0
@@ -18,8 +18,8 @@ GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback $
 
 Epoch: 2
 Name: podman
-Version: 4.1.1
-Release: 1%{?dist}
+Version: 4.2.0
+Release: 3%{?dist}
 Summary: Manage Pods, Containers and Container Images
 License: ASL 2.0 and GPLv3+
 URL: https://%{name}.io/
@@ -37,7 +37,7 @@ Source4: https://github.com/containers/%{gvproxyrepo}/archive/v%{gvproxyver}.tar
 ExclusiveArch: %{go_arches}
 Provides: %{name}-manpages = %{epoch}:%{version}-%{release}
 Obsoletes: %{name}-manpages < %{epoch}:%{version}-%{release}
-BuildRequires: golang >= 1.17.7
+BuildRequires: golang >= 1.17.5
 BuildRequires: glib2-devel
 BuildRequires: glibc-devel
 BuildRequires: glibc-static
@@ -54,12 +54,6 @@ BuildRequires: make
 BuildRequires: systemd
 BuildRequires: systemd-devel
 BuildRequires: shadow-utils-subid-devel
-# for catatonit
-BuildRequires: autoconf
-BuildRequires: automake
-BuildRequires: file
-BuildRequires: gcc
-BuildRequires: libtool
 Requires: containers-common >= 2:1-27
 Suggests: containernetworking-plugins >= 0.9.1-1
 Requires: netavark
@@ -74,6 +68,7 @@ Recommends: crun
 Requires: fuse-overlayfs
 Requires: %{name}-catatonit >= %{epoch}:%{version}-%{release}
 Requires: oci-runtime
+Conflicts: catatonit
 
 %description
 %{name} (Pod Manager) is a fully featured container engine that is a simple
@@ -116,6 +111,11 @@ variables, or in containers.conf.
 %package catatonit
 Summary: A signal-forwarding process manager for containers
 Requires: %{name} = %{epoch}:%{version}-%{release}
+BuildRequires: autoconf
+BuildRequires: automake
+BuildRequires: file
+BuildRequires: gcc
+BuildRequires: libtool
 
 %description catatonit
 Catatonit is a /sbin/init program for use within containers. It
@@ -143,7 +143,6 @@ file.  Each CNI network will have its own dnsmasq instance.
 %package tests
 Summary: Tests for %{name}
 Requires: %{name} = %{epoch}:%{version}-%{release}
-Requires: %{name}-plugins = %{epoch}:%{version}-%{release}
 #Requires: bats  (which RHEL8 doesn't have. If it ever does, un-comment this)
 Requires: nmap-ncat
 Requires: httpd-tools
@@ -154,6 +153,7 @@ Requires: openssl
 Requires: buildah
 Requires: gnupg
 Requires: git-daemon
+Requires: podman-catatonit
 
 %description tests
 %{summary}
@@ -184,8 +184,6 @@ popd
 tar fx %{SOURCE2}
 tar fx %{SOURCE3}
 tar fx %{SOURCE4}
-
-mv pkg/hooks/README.md pkg/hooks/README-hooks.md
 
 # this is shipped by skopeo: containers-common subpackage
 rm -rf docs/source/markdown/containers-mounts.conf.5.md
@@ -346,12 +344,21 @@ export GOPATH=%{buildroot}/%{gopath}:$(pwd)/vendor:%{gopath}
 %{_bindir}/%{name} system renumber
 exit 0
 
+%preun
+if [ $1 == 0 ]; then
+  systemctl stop podman.service > /dev/null 2>&1
+  systemctl stop podman.socket > /dev/null 2>&1
+  systemctl disable podman.service > /dev/null 2>&1
+  systemctl disable podman.socket > /dev/null 2>&1
+fi
+:
+
 #define license tag if not already defined
 %{!?_licensedir:%global license %doc}
 
 %files -f podman.file-list
 %license LICENSE
-%doc README.md CONTRIBUTING.md pkg/hooks/README-hooks.md install.md transfer.md
+%doc README.md CONTRIBUTING.md install.md transfer.md
 %{_bindir}/%{name}
 %{_libexecdir}/%{name}/rootlessport
 %{_datadir}/bash-completion/completions/%{name}
@@ -411,9 +418,56 @@ exit 0
 %{_libexecdir}/%{name}/gvproxy
 
 %changelog
-* Wed Jul 27 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.1.1-1
+* Mon Aug 22 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-3
+- fix dependency in test subpackage
+- Related: #2061316
+
+* Mon Aug 22 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-2
+- readd catatonit
+- Related: #2061316
+
+* Thu Aug 11 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-1
+- update to latest content of https://github.com/containers/podman/releases/tag/4.2.0
+  (https://github.com/containers/podman/commit/7fe5a419cfd2880df2028ad3d7fd9378a88a04f4)
+- Related: #2061316
+
+* Wed Aug 10 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-0.3rc3
+- require catatonit for gating tests
+- Related: #2061316
+
+* Fri Aug 05 2022 Lokesh Mandvekar <lsm5@redhat.com> - 2:4.2.0-0.2rc3
+- update to 4.2.0-rc3
+- Related: #2061316
+
+* Mon Aug 01 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-0.1rc2
+- update to 4.2.0-rc2
+- Related: #2061316
+
+* Thu Jul 28 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.1.1-6
+- convert catatonit dependency to soft dep as catatonit is
+  no longer in Appstream but in CRB
+- Related: #2061316
+
+* Fri Jul 22 2022 Lokesh Mandvekar <lsm5@redhat.com> - 2:4.1.1-5
+- rebuild for combined gating with catatonit
+- Related: #2097694
+
+* Tue Jul 19 2022 Lokesh Mandvekar <lsm5@redhat.com> - 2:4.1.1-4
+- catatonit is now a standalone package
+- Related: #2097694
+
+* Fri Jul 08 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.1.1-3
 - update to the latest content of https://github.com/containers/podman/tree/v4.1.1-rhel
   (https://github.com/containers/podman/commit/fa692a6)
+- Related: #2097694
+
+* Fri Jul 01 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.1.1-2
+- be sure podman services/sockets are stopped upon package removal
+- Related: #2061316
+
+* Wed Jun 15 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.1.1-1
+- update to https://github.com/containers/podman/releases/tag/v4.1.1
+- Related: #2061316
 
 * Mon May 23 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.1.0-4
 - don't require runc and Recommends: crun
