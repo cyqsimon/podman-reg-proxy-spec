@@ -4,8 +4,8 @@
 GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback ${BUILDTAGS:-}" -ldflags "${LDFLAGS:-} -linkmode=external -compressdwarf=false -B 0x$(head -c20 /dev/urandom|od -An -tx1|tr -d ' \\n') -extldflags '%__global_ldflags'" -a -v %{?**};
 
 %global import_path github.com/containers/podman
-#%%global branch v4.1.1-rhel
-%global commit0 7fe5a419cfd2880df2028ad3d7fd9378a88a04f4
+%global branch v4.2.0-rhel
+%global commit0 35c0df38e787ea9a8317d74aa18f47f382ed3e21
 %global shortcommit0 %(c=%{commit0}; echo ${c:0:7})
 %global cataver 0.1.7
 #%%global dnsnamever 1.3.0
@@ -19,7 +19,7 @@ GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback $
 Epoch: 2
 Name: podman
 Version: 4.2.0
-Release: 3%{?dist}
+Release: 7%{?dist}
 Summary: Manage Pods, Containers and Container Images
 License: ASL 2.0 and GPLv3+
 URL: https://%{name}.io/
@@ -68,7 +68,6 @@ Recommends: crun
 Requires: fuse-overlayfs
 Requires: %{name}-catatonit >= %{epoch}:%{version}-%{release}
 Requires: oci-runtime
-Conflicts: catatonit
 
 %description
 %{name} (Pod Manager) is a fully featured container engine that is a simple
@@ -111,6 +110,8 @@ variables, or in containers.conf.
 %package catatonit
 Summary: A signal-forwarding process manager for containers
 Requires: %{name} = %{epoch}:%{version}-%{release}
+Obsoletes: catatonit < 3:0.1.7-8
+Provides: catatonit
 BuildRequires: autoconf
 BuildRequires: automake
 BuildRequires: file
@@ -418,6 +419,25 @@ fi
 %{_libexecdir}/%{name}/gvproxy
 
 %changelog
+* Wed Oct 26 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-7
+- update to the latest content of https://github.com/containers/podman/tree/v4.2.0-rhel
+  (https://github.com/containers/podman/commit/35c0df3)
+- Resolves: #2120436
+
+* Wed Oct 26 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-6
+- update to the latest content of https://github.com/containers/podman/tree/v4.2.0-rhel
+  (https://github.com/containers/podman/commit/d520a5c)
+- Resolves: #2136845
+
+* Fri Oct 14 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-5
+- properly obsolete catatonit
+- Resolves: #2123319
+
+* Thu Oct 13 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-4
+- update to the latest content of https://github.com/containers/podman/tree/v4.2.0-rhel
+  (https://github.com/containers/podman/commit/4978898)
+- Resolves: #2124676
+
 * Mon Aug 22 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-3
 - fix dependency in test subpackage
 - Related: #2061316
