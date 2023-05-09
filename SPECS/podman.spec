@@ -5,7 +5,7 @@ GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback $
 
 %global import_path github.com/containers/podman
 %global branch v4.4.1-rhel
-%global commit0 e1703bb7f47675964852173c465769bef9ef4e1b
+%global commit0 aa5db476a82854aa45d469ea9e51b82400889838
 %global shortcommit0 %(c=%{commit0}; echo ${c:0:7})
 %global cataver 0.1.7
 #%%global dnsnamever 1.3.0
@@ -18,7 +18,7 @@ GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback $
 Epoch: 2
 Name: podman
 Version: 4.4.1
-Release: 3%{?dist}
+Release: 9%{?dist}
 Summary: Manage Pods, Containers and Container Images
 License: ASL 2.0 and GPLv3+
 URL: https://%{name}.io/
@@ -384,6 +384,36 @@ fi
 %{_libexecdir}/%{name}/gvproxy
 
 %changelog
+* Wed Apr 26 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-9
+- update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
+  (https://github.com/containers/podman/commit/aa5db47)
+- Resolves: #2189592
+
+* Fri Apr 14 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-8
+- update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
+  (https://github.com/containers/podman/commit/fd0ea3b)
+- Resolves: #2177925
+
+* Mon Apr 03 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-7
+- update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
+  (https://github.com/containers/podman/commit/05037d3)
+- Resolves: #2183602
+
+* Fri Mar 31 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-6
+- update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
+  (https://github.com/containers/podman/commit/67f7e1e)
+- Resolves: #2182492
+
+* Tue Mar 21 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-5
+- update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
+  (https://github.com/containers/podman/commit/bf400bd)
+- Resolves: #2180126
+
+* Mon Mar 20 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-4
+- update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
+  (https://github.com/containers/podman/commit/ffc2614)
+- Resolves: #2179450
+
 * Tue Feb 21 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-3
 - update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
   (https://github.com/containers/podman/commit/e1703bb)
