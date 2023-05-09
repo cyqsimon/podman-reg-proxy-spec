@@ -4,22 +4,21 @@
 GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback ${BUILDTAGS:-}" -ldflags "${LDFLAGS:-} -linkmode=external -compressdwarf=false -B 0x$(head -c20 /dev/urandom|od -An -tx1|tr -d ' \\n') -extldflags '%__global_ldflags'" -a -v %{?**};
 
 %global import_path github.com/containers/podman
-%global branch v4.2.0-rhel
-%global commit0 1a116d108e730aea8de2a53c62768e06b2c4efbc
+%global branch v4.4.1-rhel
+%global commit0 e1703bb7f47675964852173c465769bef9ef4e1b
 %global shortcommit0 %(c=%{commit0}; echo ${c:0:7})
 %global cataver 0.1.7
 #%%global dnsnamever 1.3.0
 %global commit_dnsname 18822f9a4fb35d1349eb256f4cd2bfd372474d84
 %global shortcommit_dnsname %(c=%{commit_dnsname}; echo ${c:0:7})
 %global gvproxyrepo gvisor-tap-vsock
-%global gvproxyver 0.2.0
-%global commit_mcni 0749884b8d1a455c68da30789e37811ec0809d51
-%global shortcommit_mcni %(c=%{commit_mcni}; echo ${c:0:7})
+%global gvproxyver 0.5.0
+%global commit_gvproxy aab0ac9367fc5142f5857c36ac2352bcb3c60ab7
 
 Epoch: 2
 Name: podman
-Version: 4.2.0
-Release: 11%{?dist}
+Version: 4.4.1
+Release: 3%{?dist}
 Summary: Manage Pods, Containers and Container Images
 License: ASL 2.0 and GPLv3+
 URL: https://%{name}.io/
@@ -31,12 +30,13 @@ Source0: https://%{import_path}/archive/%{commit0}/%{name}-%{version}-%{shortcom
 Source1: https://github.com/openSUSE/catatonit/archive/v%{cataver}.tar.gz
 #Source2: https://github.com/containers/dnsname/archive/v%%{dnsnamever}.tar.gz
 Source2: https://github.com/containers/dnsname/archive/%{commit_dnsname}/dnsname-%{shortcommit_dnsname}.tar.gz
-Source3: https://github.com/containers/%{name}-machine-cni/archive/%{commit_mcni}/%{name}-machine-cni-%{shortcommit_mcni}.tar.gz
-Source4: https://github.com/containers/%{gvproxyrepo}/archive/v%{gvproxyver}.tar.gz
+Source4: https://github.com/containers/gvisor-tap-vsock/archive/%{commit_gvproxy}/gvisor-tap-vsock-%{commit_gvproxy}.tar.gz
 # https://fedoraproject.org/wiki/PackagingDrafts/Go#Go_Language_Architectures
 ExclusiveArch: %{go_arches}
 Provides: %{name}-manpages = %{epoch}:%{version}-%{release}
 Obsoletes: %{name}-manpages < %{epoch}:%{version}-%{release}
+Provides: %{name}-catatonit = %{epoch}:%{version}-%{release}
+Obsoletes: %{name}-catatonit < 2:4.4.0
 BuildRequires: golang >= 1.17.5
 BuildRequires: glib2-devel
 BuildRequires: glibc-devel
@@ -54,6 +54,12 @@ BuildRequires: make
 BuildRequires: systemd
 BuildRequires: systemd-devel
 BuildRequires: shadow-utils-subid-devel
+# these BRs are for catatonit
+BuildRequires: autoconf
+BuildRequires: automake
+BuildRequires: file
+BuildRequires: gcc
+BuildRequires: libtool
 Requires: containers-common >= 2:1-27
 Suggests: containernetworking-plugins >= 0.9.1-1
 Requires: netavark
@@ -66,7 +72,6 @@ Requires: (container-selinux if selinux-policy)
 Requires: slirp4netns >= 0.4.0-1
 Recommends: crun
 Requires: fuse-overlayfs
-Requires: %{name}-catatonit >= %{epoch}:%{version}-%{release}
 Requires: oci-runtime
 
 %description
@@ -107,27 +112,6 @@ service activated.
 Credentials for this session can be passed in using flags, environment
 variables, or in containers.conf.
 
-%package catatonit
-Summary: A signal-forwarding process manager for containers
-Requires: %{name} = %{epoch}:%{version}-%{release}
-Obsoletes: catatonit < 3:0.1.7-8
-Provides: catatonit
-BuildRequires: autoconf
-BuildRequires: automake
-BuildRequires: file
-BuildRequires: gcc
-BuildRequires: libtool
-
-%description catatonit
-Catatonit is a /sbin/init program for use within containers. It
-forwards (almost) all signals to the spawned child, tears down
-the container when the spawned child exits, and otherwise
-cleans up other exited processes (zombies).
-
-This is a reimplementation of other container init programs (such as
-"tini" or "dumb-init"), but uses modern Linux facilities (such as
-signalfd(2)) and has no additional features.
-
 %package plugins
 Summary: Plugins for %{name}
 Requires: dnsmasq
@@ -154,7 +138,6 @@ Requires: openssl
 Requires: buildah
 Requires: gnupg
 Requires: git-daemon
-Requires: podman-catatonit
 
 %description tests
 %{summary}
@@ -183,7 +166,6 @@ pushd catatonit-%{cataver}
 sed -i '$d' configure.ac
 popd
 tar fx %{SOURCE2}
-tar fx %{SOURCE3}
 tar fx %{SOURCE4}
 
 # this is shipped by skopeo: containers-common subpackage
@@ -240,6 +222,9 @@ export BUILDTAGS="seccomp btrfs_noversion exclude_graphdriver_devicemapper exclu
 export BUILDTAGS="remote $BUILDTAGS"
 %gobuild -o bin/%{name}-remote %{import_path}/cmd/%{name}
 
+# build quadlet
+%gobuild -o bin/quadlet %{import_path}/cmd/quadlet
+
 %{__make} docs
 
 # build dnsname plugin
@@ -255,26 +240,15 @@ export GOPATH=$(pwd)/_build:$(pwd)
 %gobuild -o bin/dnsname github.com/containers/dnsname/plugins/meta/dnsname
 popd
 
-pushd %{name}-machine-cni-%{commit_mcni}
+pushd gvisor-tap-vsock-%{commit_gvproxy}
 mkdir _build
 pushd _build
 mkdir -p src/github.com/containers
-ln -s ../../../../ src/github.com/containers/%{name}-machine-cni
+ln -s ../../../../ src/github.com/containers/gvisor-tap-vsock
 popd
 ln -s vendor src
 export GOPATH=$(pwd)/_build:$(pwd)
-%gobuild -o bin/%{name}-machine github.com/containers/%{name}-machine-cni/plugins/meta/%{name}-machine
-popd
-
-pushd %{gvproxyrepo}-%{gvproxyver}
-mkdir _build
-pushd _build
-mkdir -p src/github.com/containers
-ln -s ../../../../ src/github.com/containers/%{gvproxyrepo}
-popd
-ln -s vendor src
-export GOPATH=$(pwd)/_build:$(pwd)
-%gobuild -o bin/gvproxy github.com/containers/%{gvproxyrepo}/cmd/gvproxy
+%gobuild -o bin/gvproxy github.com/containers/gvisor-tap-vsock/cmd/gvproxy
 popd
 
 %install
@@ -298,25 +272,18 @@ for file in `find %{buildroot}%{_mandir}/man[15] -type f | sed "s,%{buildroot},,
 done
 
 # install catatonit
-install -dp %{buildroot}%{_libexecdir}/catatonit
-install -p catatonit-%{cataver}/catatonit %{buildroot}%{_libexecdir}/catatonit
 install -dp %{buildroot}%{_libexecdir}/podman
-install -dp %{buildroot}%{_datadir}/licenses/podman-catatonit
-install -p catatonit-%{cataver}/COPYING %{buildroot}%{_datadir}/licenses/podman-catatonit/COPYING
-ln -s %{_libexecdir}/catatonit/catatonit %{buildroot}%{_libexecdir}/podman/catatonit
+install -dp %{buildroot}%{_datadir}/licenses/podman
+install -p catatonit-%{cataver}/catatonit %{buildroot}%{_libexecdir}/podman/catatonit
+install -p catatonit-%{cataver}/COPYING %{buildroot}%{_datadir}/licenses/podman/COPYING-catatonit
 
 # install dnsname plugin
 pushd dnsname-%{commit_dnsname}
 %{__make} PREFIX=%{_prefix} DESTDIR=%{buildroot} install
 popd
 
-# install machine-cni plugin
-pushd %{name}-machine-cni-%{commit_mcni}
-%{__make} PREFIX=%{_prefix} DESTDIR=%{buildroot} install
-popd
-
 # install gvproxy
-pushd %{gvproxyrepo}-%{gvproxyver}
+pushd gvisor-tap-vsock-%{commit_gvproxy}
 install -dp %{buildroot}%{_libexecdir}/%{name}
 install -p -m0755 bin/gvproxy %{buildroot}%{_libexecdir}/%{name}
 popd
@@ -358,9 +325,10 @@ fi
 %{!?_licensedir:%global license %doc}
 
 %files -f podman.file-list
-%license LICENSE
+%license LICENSE COPYING-catatonit
 %doc README.md CONTRIBUTING.md install.md transfer.md
 %{_bindir}/%{name}
+%{_libexecdir}/%{name}/quadlet
 %{_libexecdir}/%{name}/rootlessport
 %{_datadir}/bash-completion/completions/%{name}
 # By "owning" the site-functions dir, we don't need to Require zsh
@@ -377,10 +345,16 @@ fi
 %{_userunitdir}/*.socket
 %{_userunitdir}/*.timer
 %{_usr}/lib/tmpfiles.d/%{name}.conf
+%dir %{_libexecdir}/podman
+%{_libexecdir}/podman/catatonit
+%{_usr}/lib/systemd/system-generators/podman-system-generator
+%{_usr}/lib/systemd/user-generators/podman-user-generator
+
 
 %files docker
 %{_bindir}/docker
 %{_usr}/lib/tmpfiles.d/%{name}-docker.conf
+%{_datadir}/user-tmpfiles.d/podman-docker.conf
 
 %files remote
 %license LICENSE
@@ -394,69 +368,117 @@ fi
 %dir %{_datadir}/zsh/site-functions
 %{_datadir}/zsh/site-functions/_%{name}-remote
 
-%files catatonit
-%license COPYING
-%doc README.md
-%dir %{_libexecdir}/catatonit
-%{_libexecdir}/catatonit/catatonit
-%dir %{_libexecdir}/podman
-%{_libexecdir}/podman/catatonit
-
 %files plugins
 %license dnsname-%{commit_dnsname}/LICENSE
 %doc dnsname-%{commit_dnsname}/{README.md,README_PODMAN.md}
 %{_libexecdir}/cni/dnsname
-%{_libexecdir}/cni/%{name}-machine
 
 %files tests
 %license LICENSE
 %{_datadir}/%{name}/test
 
 %files gvproxy
-%license %{gvproxyrepo}-%{gvproxyver}/LICENSE
-%doc %{gvproxyrepo}-%{gvproxyver}/README.md
+%license gvisor-tap-vsock-%{commit_gvproxy}/LICENSE
+%doc gvisor-tap-vsock-%{commit_gvproxy}/README.md
 %dir %{_libexecdir}/%{name}
 %{_libexecdir}/%{name}/gvproxy
 
 %changelog
-* Tue Feb 07 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-11
-- update to the latest content of https://github.com/containers/podman/tree/v4.2.0-rhel
-  (https://github.com/containers/podman/commit/1a116d1)
-- Resolves: #2166104
+* Tue Feb 21 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-3
+- update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
+  (https://github.com/containers/podman/commit/e1703bb)
+- Related: #2124478
 
-* Tue Jan 10 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-10
-- update to the latest content of https://github.com/containers/podman/tree/v4.2.0-rhel
-  (https://github.com/containers/podman/commit/28df097)
-- Resolves: #2158636
+* Mon Feb 20 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-2
+- update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
+  (https://github.com/containers/podman/commit/0b38633)
+- Related: #2124478
 
-* Mon Dec 12 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-9
-- update to the latest content of https://github.com/containers/podman/tree/v4.2.0-rhel
-  (https://github.com/containers/podman/commit/bfac4a5)
-- Resolves: #2152026
+* Thu Feb 09 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-1
+- update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
+  (https://github.com/containers/podman/commit/d4e285a)
+- Related: #2124478
 
-* Thu Dec 01 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-8
-- update to the latest content of https://github.com/containers/podman/tree/v4.2.0-rhel
-  (https://github.com/containers/podman/commit/6742838)
-- Resolves: #2149776
+* Wed Feb 08 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-0.1
+- update to the latest content of https://github.com/containers/podman/tree/v4.4
+  (https://github.com/containers/podman/commit/f5670f0)
+- Related: #2124478
 
-* Wed Oct 26 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-7
-- update to the latest content of https://github.com/containers/podman/tree/v4.2.0-rhel
-  (https://github.com/containers/podman/commit/35c0df3)
-- Resolves: #2120436
+* Fri Feb 03 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.0-1
+- update to podman-4.4 release
+- Related: #2124478
 
-* Wed Oct 26 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-6
-- update to the latest content of https://github.com/containers/podman/tree/v4.2.0-rhel
-  (https://github.com/containers/podman/commit/d520a5c)
-- Resolves: #2136845
+* Wed Feb 01 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.0-0.10
+- update to the latest content of https://github.com/containers/podman/tree/main
+  (https://github.com/containers/podman/commit/68bbdc2)
+- Related: #2124478
 
-* Fri Oct 14 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-5
+* Mon Jan 30 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.0-0.9
+- update to the latest content of https://github.com/containers/podman/tree/main
+  (https://github.com/containers/podman/commit/323b515)
+- Related: #2124478
+
+* Wed Jan 25 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.0-0.8
+- update to the latest content of https://github.com/containers/podman/tree/main
+  (https://github.com/containers/podman/commit/c35e74f)
+- Related: #2124478
+
+* Tue Jan 24 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.0-0.7
+- update to the latest content of https://github.com/containers/podman/tree/main
+  (https://github.com/containers/podman/commit/ce504bb)
+- Related: #2124478
+
+* Thu Jan 19 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.0-0.6
+- add quadlet to tests
+- Related: #2124478
+
+* Wed Jan 18 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.0-0.5
+- obsolete podman-catatonit in order to not to file conflict with catatonit
+- Related: #2124478
+
+* Wed Jan 18 2023 Lokesh Mandvekar <lsm5@redhat.com> - 2:4.4.0-0.4
+- build v4.4.0-rc2
+- Related: #2124478
+
+* Tue Jan 17 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.0-0.3
+- remove podman-machine-cni, it is now part of podman 4.0 or newer
+- Related: #2124478
+
+* Tue Jan 17 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.0-0.2
+- update to the latest content of https://github.com/containers/podman/tree/main
+  (https://github.com/containers/podman/commit/07ba51d)
+- update gvisor-tap-vsock to 0.5.0
+- Related: #2124478
+
+* Fri Jan 13 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.0-0.1
+- podman-4.4.0-rc1
+- update to the latest content of https://github.com/containers/podman/tree/main
+  (https://github.com/containers/podman/commit/f1af5b3)
+- Related: #2124478
+
+* Wed Jan 11 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.3.1-4
+- podman shouldn't provide and file conflict with catatonit in CRB
+- Resolves: #2151322
+
+* Mon Nov 28 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.3.1-3
+- fix 'podman manifest add' is not concurrent safe
+- Resolves: #2105173
+
+* Sat Nov 26 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.3.1-2
 - properly obsolete catatonit
 - Resolves: #2123319
 
-* Thu Oct 13 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-4
-- update to the latest content of https://github.com/containers/podman/tree/v4.2.0-rhel
-  (https://github.com/containers/podman/commit/4978898)
-- Resolves: #2124676
+* Wed Nov 16 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.3.1-1
+- update to https://github.com/containers/podman/releases/tag/v4.3.1
+- Related: #2124478
+
+* Tue Nov 08 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.3.0-2
+- rebuild to fix CVE-2022-30629
+- Related: #2102994
+
+* Thu Nov 03 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.3.0-1
+- update to https://github.com/containers/podman/releases/tag/v4.3.0
+- Related: #2124478
 
 * Mon Aug 22 2022 Jindrich Novy <jnovy@redhat.com> - 2:4.2.0-3
 - fix dependency in test subpackage
