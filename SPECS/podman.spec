@@ -5,7 +5,7 @@ GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback $
 
 %global import_path github.com/containers/podman
 %global branch v4.4.1-rhel
-%global commit0 aa5db476a82854aa45d469ea9e51b82400889838
+%global commit0 ff30585bad3015569c6d7eda8063864d116c901d
 %global shortcommit0 %(c=%{commit0}; echo ${c:0:7})
 %global cataver 0.1.7
 #%%global dnsnamever 1.3.0
@@ -18,7 +18,7 @@ GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback $
 Epoch: 2
 Name: podman
 Version: 4.4.1
-Release: 9%{?dist}
+Release: 12%{?dist}
 Summary: Manage Pods, Containers and Container Images
 License: ASL 2.0 and GPLv3+
 URL: https://%{name}.io/
@@ -384,6 +384,20 @@ fi
 %{_libexecdir}/%{name}/gvproxy
 
 %changelog
+* Thu Jun 15 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-12
+- update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
+  (https://github.com/containers/podman/commit/ff30585)
+- Resolves: #2213844
+
+* Fri Jun 09 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-11
+- fix --dns-add get error logs when there is no container attached to the network
+- Resolves: #2210118
+
+* Wed Jun 07 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-10
+- update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
+  (https://github.com/containers/podman/commit/bcea446)
+- Resolves: #2210113
+
 * Wed Apr 26 2023 Jindrich Novy <jnovy@redhat.com> - 2:4.4.1-9
 - update to the latest content of https://github.com/containers/podman/tree/v4.4.1-rhel
   (https://github.com/containers/podman/commit/aa5db47)
