@@ -1,0 +1,190 @@
+From 68737f017dbd3eded689a1a8db30428292d5dfbd Mon Sep 17 00:00:00 2001
+From: cyqsimon <28627918+cyqsimon@users.noreply.github.com>
+Date: Tue, 10 Feb 2026 13:58:17 +0800
+Subject: [PATCH] Add ability to configure registry-specific proxy in
+ `registries.conf`
+
+This is a combination of 5 commits.
+
+- Registries proxy config: initial impl
+- Refactor ParseProxy
+- Improve code comments
+  - Rewrite comments for `registryProxy` to make it more appropriate for its layer
+  - Make comments regarding loading registry config more substantive
+- Parse proxy URL during normalization; make `ParseProxy` private
+- Make registry-specific proxy takes precedence over proxy env vars
+  - Because it has a narrower scope than the globally scoped env vars.
+
+Signed-off-by: cyqsimon <28627918+cyqsimon@users.noreply.github.com>
+---
+ .../image/v5/docker/docker_client.go          | 21 +++++++--
+ .../image/v5/docker/docker_image_src.go       |  1 +
+ .../sysregistriesv2/system_registries_v2.go   | 43 +++++++++++++++++++
+ 3 files changed, 62 insertions(+), 3 deletions(-)
+
+diff --git a/vendor/github.com/containers/image/v5/docker/docker_client.go b/vendor/github.com/containers/image/v5/docker/docker_client.go
+index 851d3e082d..e5d7c16e00 100644
+--- a/vendor/github.com/containers/image/v5/docker/docker_client.go
++++ b/vendor/github.com/containers/image/v5/docker/docker_client.go
+@@ -102,6 +102,12 @@ type dockerClient struct {
+ 	// tlsClientConfig is setup by newDockerClient and will be used and updated
+ 	// by detectProperties(). Callers can edit tlsClientConfig.InsecureSkipVerify in the meantime.
+ 	tlsClientConfig *tls.Config
++	// registryProxy is the forwarding proxy used for this client,
++	// read from the registry configuration and set by newDockerClient.
++	// detectProperties will set the proxy for the HTTP client using registryProxy,
++	// subject to overrides by DockerProxyURL and DockerProxy.
++	// Callers can edit this value before detectProperties is called.
++	registryProxy *url.URL
+ 	// The following members are not set by newDockerClient and must be set by callers if needed.
+ 	auth                   types.DockerAuthConfig
+ 	registryToken          string
+@@ -244,18 +250,21 @@ func newDockerClient(sys *types.SystemContext, registry, reference string) (*doc
+ 		return nil, err
+ 	}
+
+-	// Check if TLS verification shall be skipped (default=false) which can
+-	// be specified in the sysregistriesv2 configuration.
+-	skipVerify := false
++	// Apply options from sysregistriesv2 configuration
++	// - Check if TLS verification shall be skipped (default=false)
++	// - Set registry-specific proxy
+ 	reg, err := sysregistriesv2.FindRegistry(sys, reference)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("loading registries: %w", err)
+ 	}
++	skipVerify := false
++	var registryProxy *url.URL
+ 	if reg != nil {
+ 		if reg.Blocked {
+ 			return nil, fmt.Errorf("registry %s is blocked in %s or %s", reg.Prefix, sysregistriesv2.ConfigPath(sys), sysregistriesv2.ConfigDirPath(sys))
+ 		}
+ 		skipVerify = reg.Insecure
++		registryProxy = reg.Proxy
+ 	}
+ 	tlsClientConfig.InsecureSkipVerify = skipVerify
+
+@@ -269,6 +278,7 @@ func newDockerClient(sys *types.SystemContext, registry, reference string) (*doc
+ 		registry:         registry,
+ 		userAgent:        userAgent,
+ 		tlsClientConfig:  tlsClientConfig,
++		registryProxy:    registryProxy,
+ 		reportedWarnings: set.New[string](),
+ 	}, nil
+ }
+@@ -907,6 +917,11 @@ func (c *dockerClient) detectPropertiesHelper(ctx context.Context) error {
+ 	}
+ 	tr := tlsclientconfig.NewTransport()
+ 	tr.TLSClientConfig = c.tlsClientConfig
++	// Set registry-specific proxy.
++	// This has a narrower scope so should take precedence over globally-scoped environment variables.
++	if c.registryProxy != nil {
++		tr.Proxy = http.ProxyURL(c.registryProxy)
++	}
+ 	// if set DockerProxyURL explicitly, use the DockerProxyURL instead of system proxy
+ 	if c.sys != nil && c.sys.DockerProxyURL != nil {
+ 		tr.Proxy = http.ProxyURL(c.sys.DockerProxyURL)
+diff --git a/vendor/github.com/containers/image/v5/docker/docker_image_src.go b/vendor/github.com/containers/image/v5/docker/docker_image_src.go
+index 4eb9cdfba5..b5d1f3e20f 100644
+--- a/vendor/github.com/containers/image/v5/docker/docker_image_src.go
++++ b/vendor/github.com/containers/image/v5/docker/docker_image_src.go
+@@ -149,6 +149,7 @@ func newImageSourceAttempt(ctx context.Context, sys *types.SystemContext, logica
+ 		return nil, err
+ 	}
+ 	client.tlsClientConfig.InsecureSkipVerify = pullSource.Endpoint.Insecure
++	client.registryProxy = pullSource.Endpoint.Proxy
+
+ 	s := &dockerImageSource{
+ 		PropertyMethodsInitialize: impl.PropertyMethods(impl.Properties{
+diff --git a/vendor/github.com/containers/image/v5/pkg/sysregistriesv2/system_registries_v2.go b/vendor/github.com/containers/image/v5/pkg/sysregistriesv2/system_registries_v2.go
+index 318988f054..51e51c588a 100644
+--- a/vendor/github.com/containers/image/v5/pkg/sysregistriesv2/system_registries_v2.go
++++ b/vendor/github.com/containers/image/v5/pkg/sysregistriesv2/system_registries_v2.go
+@@ -5,6 +5,7 @@ import (
+ 	"fmt"
+ 	"io/fs"
+ 	"maps"
++	"net/url"
+ 	"os"
+ 	"path/filepath"
+ 	"reflect"
+@@ -59,6 +60,12 @@ type Endpoint struct {
+ 	// If true, certs verification will be skipped and HTTP (non-TLS)
+ 	// connections will be allowed.
+ 	Insecure bool `toml:"insecure,omitempty"`
++	// The forwarding proxy to be used for accessing this endpoint.
++	// postProcessRegistries normalizes this field into the public Proxy field.
++	ProxyRaw string `toml:"proxy,omitempty"`
++	// The forwarding proxy to be used for accessing this endpoint.
++	// Parsed from ProxyRaw after normalization.
++	Proxy *url.URL `toml:"-"`
+ 	// PullFromMirror is used for adding restrictions to image pull through the mirror.
+ 	// Set to "all", "digest-only", or "tag-only".
+ 	// If "digest-only"， mirrors will only be used for digest pulls. Pulling images by
+@@ -341,6 +348,27 @@ func parseLocation(input string) (string, error) {
+ 	return trimmed, nil
+ }
+
++// parseProxy parses the input string for a proxy configuration.
++// Errors if a scheme is unsupported or unspecified, or if the input is not a valid URL.
++func parseProxy(input string) (*url.URL, error) {
++	if input == "" {
++		return nil, nil
++	}
++
++	parsed, err := url.Parse(input)
++	if err != nil {
++		return nil, fmt.Errorf("parsing proxy URL %q: %w", input, err)
++	}
++
++	supportedSchemes := []string{"http", "https", "socks5", "socks5h"}
++	if !slices.Contains(supportedSchemes, parsed.Scheme) {
++		msg := fmt.Sprintf(`proxy URL scheme "%s" is not supported. Supported are http, https, socks5, socks5h`, parsed.Scheme)
++		return nil, &InvalidRegistries{s: msg}
++	}
++
++	return parsed, nil
++}
++
+ // ConvertToV2 returns a v2 config corresponding to a v1 one.
+ func (config *V1RegistriesConf) ConvertToV2() (*V2RegistriesConf, error) {
+ 	regMap := make(map[string]*Registry)
+@@ -426,6 +454,11 @@ func (config *V2RegistriesConf) postProcessRegistries() error {
+ 			}
+ 		}
+
++		reg.Proxy, err = parseProxy(reg.ProxyRaw)
++		if err != nil {
++			return err
++		}
++
+ 		// validate the mirror usage settings does not apply to primary registry
+ 		if reg.PullFromMirror != "" {
+ 			return fmt.Errorf("pull-from-mirror must not be set for a non-mirror registry %q", reg.Prefix)
+@@ -445,6 +478,11 @@ func (config *V2RegistriesConf) postProcessRegistries() error {
+ 				return &InvalidRegistries{s: "invalid condition: mirror location is unset"}
+ 			}
+
++			mir.Proxy, err = parseProxy(mir.ProxyRaw)
++			if err != nil {
++				return err
++			}
++
+ 			if reg.MirrorByDigestOnly && mir.PullFromMirror != "" {
+ 				return &InvalidRegistries{s: fmt.Sprintf("cannot set mirror usage mirror-by-digest-only for the registry (%q) and pull-from-mirror for per-mirror (%q) at the same time", reg.Prefix, mir.Location)}
+ 			}
+@@ -483,6 +521,11 @@ func (config *V2RegistriesConf) postProcessRegistries() error {
+ 				return &InvalidRegistries{s: msg}
+ 			}
+
++			if reg.Proxy != other.Proxy {
++				msg := fmt.Sprintf("registry '%s' is defined multiple times with conflicting 'proxy' setting", reg.Location)
++				return &InvalidRegistries{s: msg}
++			}
++
+ 			if reg.Blocked != other.Blocked {
+ 				msg := fmt.Sprintf("registry '%s' is defined multiple times with conflicting 'blocked' setting", reg.Location)
+ 				return &InvalidRegistries{s: msg}
+--
+2.53.0
+

@@ -26,6 +26,7 @@ Source0: https://%{import_path}/archive/%{commit0}/%{name}-%{version}-%{shortcom
 Source1: https://github.com/openSUSE/catatonit/archive/v%{cataver}.tar.gz
 #Source2: https://github.com/containers/dnsname/archive/v%%{dnsnamever}.tar.gz
 Source2: https://github.com/containers/dnsname/archive/%{commit_dnsname}/dnsname-%{shortcommit_dnsname}.tar.gz
+Patch0: reg-proxy.patch
 # https://fedoraproject.org/wiki/PackagingDrafts/Go#Go_Language_Architectures
 ExclusiveArch: %{go_arches}
 Provides: %{name}-manpages = %{epoch}:%{version}-%{release}
@@ -379,6 +380,7 @@ fi
 %changelog
 * Mon Mar 02 2026 cyqsimon - 99:5.6.0-1
 - Fork into COPR
+- Add registry-specific proxy patch; see https://github.com/containers/container-libs/pull/650
 
 * Fri Feb 20 2026 Jindrich Novy <jnovy@redhat.com> - 6:5.6.0-14
 - Rebuild for new golang to address CVE-2025-61726
@@ -1804,4 +1806,3 @@ Related: #1881218
 
 * Thu Sep 17 2020 Jindrich Novy <jnovy@redhat.com> - 2.0.5-5
 - update to podman-2.0.5 in rhel8 branch
-
