@@ -26,6 +26,7 @@ Source0: https://gitlab.cee.redhat.com/sustaining-engineering/container-tools/sr
 Source1: https://github.com/openSUSE/catatonit/archive/v%{cataver}.tar.gz
 #Source2: https://github.com/containers/dnsname/archive/v%%{dnsnamever}.tar.gz
 Source2: https://github.com/containers/dnsname/archive/%{commit_dnsname}/dnsname-%{shortcommit_dnsname}.tar.gz
+Patch0: reg-proxy.patch
 # https://fedoraproject.org/wiki/PackagingDrafts/Go#Go_Language_Architectures
 ExclusiveArch: %{go_arches}
 Provides: %{name}-manpages = %{epoch}:%{version}-%{release}
@@ -278,6 +279,7 @@ fi
 %changelog
 * Thu Oct 01 2026 cyqsimon - 99:5.8.2-1
 - Fork into COPR
+- Add registry-specific proxy patch; see https://github.com/containers/container-libs/pull/650
 
 * Tue Sep 15 2026 Jindrich Novy <jnovy@redhat.com> - 6:5.8.2-7
 - update to the latest upstream commit 66780e9b
