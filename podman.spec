@@ -173,8 +173,6 @@ PODMAN_VERSION=%{version} %{__make} PREFIX=%{buildroot}%{_prefix} ETCDIR=%{build
         install.systemd \
         install.completions \
 
-sed -i 's;%{buildroot};;g' %{buildroot}%{_bindir}/docker
-
 # remove unwanted man pages
 rm -f %{buildroot}%{_mandir}/man5/docker*.5
 
