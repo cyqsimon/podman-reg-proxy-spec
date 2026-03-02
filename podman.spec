@@ -176,6 +176,9 @@ PODMAN_VERSION=%{version} %{__make} PREFIX=%{buildroot}%{_prefix} ETCDIR=%{build
 # remove unwanted man pages
 rm -f %{buildroot}%{_mandir}/man5/docker*.5
 
+# remove unwanted podman-remote files
+find %{buildroot} -type f -name '*podman-remote*' | xargs rm -f
+
 # do not include docker and podman-remote man pages in main package
 for file in `find %{buildroot}%{_mandir}/man[157] -type f | sed "s,%{buildroot},," | grep -v -e remote -e docker`; do
     echo "$file*" >> podman.file-list
