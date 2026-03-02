@@ -11,10 +11,10 @@ GO111MODULE=off go build -buildmode pie -compiler gc -tags="rpm_crashtraceback $
 %global commit_dnsname bdc4ab85266ade865a7c398336e98721e62ef6b2
 %global shortcommit_dnsname %(c=%{commit_dnsname}; echo ${c:0:7})
 
-Epoch: 6
+Epoch: 99
 Name: podman
 Version: 5.6.0
-Release: 14%{?dist}
+Release: 1%{?dist}
 Summary: Manage Pods, Containers and Container Images
 License: Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND ISC AND MIT AND MPL-2.0
 URL: https://%{name}.io/
@@ -377,6 +377,9 @@ fi
 %{_datadir}/%{name}/test
 
 %changelog
+* Mon Mar 02 2026 cyqsimon - 99:5.6.0-1
+- Fork into COPR
+
 * Fri Feb 20 2026 Jindrich Novy <jnovy@redhat.com> - 6:5.6.0-14
 - Rebuild for new golang to address CVE-2025-61726
 - Resolves: RHEL-146869
