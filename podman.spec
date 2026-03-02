@@ -99,53 +99,6 @@ This package installs a script named docker that emulates the Docker CLI by
 executes %{name} commands, it also creates links between all Docker CLI man
 pages and %{name}.
 
-%package remote
-Summary: A remote CLI for Podman: A Simple management tool for pods, containers and images
-
-%description remote
-%{name}-remote provides a local client interacting with a Podman backend
-node through a RESTful API tunneled through a ssh connection. In this context,
-a %{name} node is a Linux system with Podman installed on it and the API
-service activated.
-
-Credentials for this session can be passed in using flags, environment
-variables, or in containers.conf.
-
-%package plugins
-Summary: Plugins for %{name}
-Requires: dnsmasq
-Recommends: gvisor-tap-vsock
-
-%description plugins
-This plugin sets up the use of dnsmasq on a given CNI network so
-that Pods can resolve each other by name.  When configured,
-the pod and its IP address are added to a network specific hosts file
-that dnsmasq will read in.  Similarly, when a pod
-is removed from the network, it will remove the entry from the hosts
-file.  Each CNI network will have its own dnsmasq instance.
-
-%package tests
-Summary: Tests for %{name}
-Requires: %{name} = %{epoch}:%{version}-%{release}
-# Fetch bats rpm if you can, else install any way available
-Recommends: bats
-Requires: nmap-ncat
-Requires: httpd-tools
-Requires: jq
-Requires: socat
-Requires: skopeo
-Requires: openssl
-Requires: buildah
-Requires: gnupg
-Requires: git-daemon
-Recommends: slirp4netns
-
-%description tests
-%{summary}
-
-This package contains system tests for %{name}. Only intended to be used for
-gating tests. Not supported for end users / customers.
-
 %prep
 %if 0%{?branch:1}
 %autosetup -Sgit -n containers-%{name}-%{shortcommit0}
@@ -217,55 +170,29 @@ export BASEBUILDTAGS="cni seccomp $(hack/systemd_tag.sh) $(hack/libsubid_tag.sh)
 export BUILDTAGS="$BASEBUILDTAGS $(hack/btrfs_installed_tag.sh)"
 %gobuild -o bin/%{name} %{import_path}/cmd/%{name}
 
-# build %%{name}-remote
-export BUILDTAGS="$BASEBUILDTAGS exclude_graphdriver_btrfs remote"
-%gobuild -o bin/%{name}-remote %{import_path}/cmd/%{name}
-
 # build quadlet
 export BUILDTAGS="$BASEBUILDTAGS $(hack/btrfs_installed_tag.sh)"
 %gobuild -o bin/quadlet %{import_path}/cmd/quadlet
 
-# build %%{name}-testing
-export BUILDTAGS="$BASEBUILDTAGS $(hack/btrfs_installed_tag.sh)"
-%gobuild -o bin/podman-testing %{import_path}/cmd/podman-testing
-
 %{__make} docs
 %{__make} docker-docs
-
-# build dnsname plugin
-unset LDFLAGS
-pushd dnsname-%{commit_dnsname}
-mkdir _build
-pushd _build
-mkdir -p src/github.com/containers
-ln -s ../../../../ src/github.com/containers/dnsname
-popd
-ln -s vendor src
-export GOPATH=$(pwd)/_build:$(pwd)
-%gobuild -o bin/dnsname github.com/containers/dnsname/plugins/meta/dnsname
-popd
 
 %install
 PODMAN_VERSION=%{version} %{__make} PREFIX=%{buildroot}%{_prefix} ETCDIR=%{buildroot}%{_sysconfdir} \
         install.bin \
-        install.remote \
         install.man \
         install.systemd \
         install.completions \
         install.docker \
-        install.docker-docs \
-        install.testing
+        install.docker-docs
 
 sed -i 's;%{buildroot};;g' %{buildroot}%{_bindir}/docker
 
 # remove unwanted man pages
 rm -f %{buildroot}%{_mandir}/man5/docker*.5
 
-# install test scripts, but not the internal helpers.t meta-test
-ln -s ./ ./vendor/src # ./vendor/src -> ./vendor
-install -d -p %{buildroot}/%{_datadir}/%{name}/test/system
-cp -pav test/system %{buildroot}/%{_datadir}/%{name}/test/
-rm -f               %{buildroot}/%{_datadir}/%{name}/test/system/*.t
+# remove unwanted podman-remote files
+find %{buildroot} -type f -name '*podman-remote*' | xargs rm -f
 
 # do not include docker and podman-remote man pages in main package
 for file in `find %{buildroot}%{_mandir}/man[157] -type f | sed "s,%{buildroot},," | grep -v -e remote -e docker`; do
@@ -277,11 +204,6 @@ install -dp %{buildroot}%{_libexecdir}/podman
 install -dp %{buildroot}%{_datadir}/licenses/podman
 install -p catatonit-%{cataver}/catatonit %{buildroot}%{_libexecdir}/podman/catatonit
 install -p catatonit-%{cataver}/COPYING %{buildroot}%{_datadir}/licenses/podman/COPYING-catatonit
-
-# install dnsname plugin
-pushd dnsname-%{commit_dnsname}
-%{__make} PREFIX=%{_prefix} DESTDIR=%{buildroot} install
-popd
 
 %check
 %if 0%{?with_check}
@@ -346,35 +268,12 @@ fi
 %{_usr}/lib/systemd/system-generators/podman-system-generator
 %{_usr}/lib/systemd/user-generators/podman-user-generator
 
-
 %files docker
 %{_bindir}/docker
 %{_mandir}/man1/docker*.1*
 %{_sysconfdir}/profile.d/%{name}-docker.*
 %{_tmpfilesdir}/%{name}-docker.conf
 %{_user_tmpfilesdir}/%{name}-docker.conf
-
-%files remote
-%license LICENSE
-%{_bindir}/%{name}-remote
-%{_mandir}/man1/%{name}-remote*.*
-%{_datadir}/bash-completion/completions/%{name}-remote
-%dir %{_datadir}/fish
-%dir %{_datadir}/fish/vendor_completions.d
-%{_datadir}/fish/vendor_completions.d/%{name}-remote.fish
-%dir %{_datadir}/zsh
-%dir %{_datadir}/zsh/site-functions
-%{_datadir}/zsh/site-functions/_%{name}-remote
-
-%files plugins
-%license dnsname-%{commit_dnsname}/LICENSE
-%doc dnsname-%{commit_dnsname}/{README.md,README_PODMAN.md}
-%{_libexecdir}/cni/dnsname
-
-%files tests
-%license LICENSE
-%{_bindir}/%{name}-testing
-%{_datadir}/%{name}/test
 
 %changelog
 * Thu Oct 01 2026 cyqsimon - 99:5.8.2-1
