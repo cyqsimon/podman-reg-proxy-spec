@@ -100,53 +100,6 @@ This package installs a script named docker that emulates the Docker CLI by
 executes %{name} commands, it also creates links between all Docker CLI man
 pages and %{name}.
 
-%package remote
-Summary: A remote CLI for Podman: A Simple management tool for pods, containers and images
-
-%description remote
-%{name}-remote provides a local client interacting with a Podman backend
-node through a RESTful API tunneled through a ssh connection. In this context,
-a %{name} node is a Linux system with Podman installed on it and the API
-service activated.
-
-Credentials for this session can be passed in using flags, environment
-variables, or in containers.conf.
-
-%package plugins
-Summary: Plugins for %{name}
-Requires: dnsmasq
-Recommends: gvisor-tap-vsock
-
-%description plugins
-This plugin sets up the use of dnsmasq on a given CNI network so
-that Pods can resolve each other by name.  When configured,
-the pod and its IP address are added to a network specific hosts file
-that dnsmasq will read in.  Similarly, when a pod
-is removed from the network, it will remove the entry from the hosts
-file.  Each CNI network will have its own dnsmasq instance.
-
-%package tests
-Summary: Tests for %{name}
-Requires: %{name} = %{epoch}:%{version}-%{release}
-# Fetch bats rpm if you can, else install any way available
-Recommends: bats
-Requires: nmap-ncat
-Requires: httpd-tools
-Requires: jq
-Requires: socat
-Requires: skopeo
-Requires: openssl
-Requires: buildah
-Requires: gnupg
-Requires: git-daemon
-Recommends: slirp4netns
-
-%description tests
-%{summary}
-
-This package contains system tests for %{name}. Only intended to be used for
-gating tests. Not supported for end users / customers.
-
 %prep
 %if 0%{?branch:1}
 %autosetup -Sgit -n containers-%{name}-%{shortcommit0}
@@ -354,28 +307,6 @@ fi
 %{_sysconfdir}/profile.d/%{name}-docker.*
 %{_tmpfilesdir}/%{name}-docker.conf
 %{_user_tmpfilesdir}/%{name}-docker.conf
-
-%files remote
-%license LICENSE
-%{_bindir}/%{name}-remote
-%{_mandir}/man1/%{name}-remote*.*
-%{_datadir}/bash-completion/completions/%{name}-remote
-%dir %{_datadir}/fish
-%dir %{_datadir}/fish/vendor_completions.d
-%{_datadir}/fish/vendor_completions.d/%{name}-remote.fish
-%dir %{_datadir}/zsh
-%dir %{_datadir}/zsh/site-functions
-%{_datadir}/zsh/site-functions/_%{name}-remote
-
-%files plugins
-%license dnsname-%{commit_dnsname}/LICENSE
-%doc dnsname-%{commit_dnsname}/{README.md,README_PODMAN.md}
-%{_libexecdir}/cni/dnsname
-
-%files tests
-%license LICENSE
-%{_bindir}/%{name}-testing
-%{_datadir}/%{name}/test
 
 %changelog
 * Mon Mar 02 2026 cyqsimon - 99:5.6.0-1
