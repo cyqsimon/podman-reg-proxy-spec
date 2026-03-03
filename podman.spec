@@ -171,55 +171,26 @@ export BASEBUILDTAGS="cni seccomp $(hack/systemd_tag.sh) $(hack/libsubid_tag.sh)
 export BUILDTAGS="$BASEBUILDTAGS $(hack/btrfs_installed_tag.sh)"
 %gobuild -o bin/%{name} %{import_path}/cmd/%{name}
 
-# build %%{name}-remote
-export BUILDTAGS="$BASEBUILDTAGS exclude_graphdriver_btrfs remote"
-%gobuild -o bin/%{name}-remote %{import_path}/cmd/%{name}
-
 # build quadlet
 export BUILDTAGS="$BASEBUILDTAGS $(hack/btrfs_installed_tag.sh)"
 %gobuild -o bin/quadlet %{import_path}/cmd/quadlet
 
-# build %%{name}-testing
-export BUILDTAGS="$BASEBUILDTAGS $(hack/btrfs_installed_tag.sh)"
-%gobuild -o bin/podman-testing %{import_path}/cmd/podman-testing
-
 %{__make} docs
 %{__make} docker-docs
-
-# build dnsname plugin
-unset LDFLAGS
-pushd dnsname-%{commit_dnsname}
-mkdir _build
-pushd _build
-mkdir -p src/github.com/containers
-ln -s ../../../../ src/github.com/containers/dnsname
-popd
-ln -s vendor src
-export GOPATH=$(pwd)/_build:$(pwd)
-%gobuild -o bin/dnsname github.com/containers/dnsname/plugins/meta/dnsname
-popd
 
 %install
 PODMAN_VERSION=%{version} %{__make} PREFIX=%{buildroot}%{_prefix} ETCDIR=%{buildroot}%{_sysconfdir} \
         install.bin \
-        install.remote \
         install.man \
         install.systemd \
         install.completions \
         install.docker \
         install.docker-docs \
-        install.testing
 
 sed -i 's;%{buildroot};;g' %{buildroot}%{_bindir}/docker
 
 # remove unwanted man pages
 rm -f %{buildroot}%{_mandir}/man5/docker*.5
-
-# install test scripts, but not the internal helpers.t meta-test
-ln -s ./ ./vendor/src # ./vendor/src -> ./vendor
-install -d -p %{buildroot}/%{_datadir}/%{name}/test/system
-cp -pav test/system %{buildroot}/%{_datadir}/%{name}/test/
-rm -f               %{buildroot}/%{_datadir}/%{name}/test/system/*.t
 
 # do not include docker and podman-remote man pages in main package
 for file in `find %{buildroot}%{_mandir}/man[157] -type f | sed "s,%{buildroot},," | grep -v -e remote -e docker`; do
@@ -231,11 +202,6 @@ install -dp %{buildroot}%{_libexecdir}/podman
 install -dp %{buildroot}%{_datadir}/licenses/podman
 install -p catatonit-%{cataver}/catatonit %{buildroot}%{_libexecdir}/podman/catatonit
 install -p catatonit-%{cataver}/COPYING %{buildroot}%{_datadir}/licenses/podman/COPYING-catatonit
-
-# install dnsname plugin
-pushd dnsname-%{commit_dnsname}
-%{__make} PREFIX=%{_prefix} DESTDIR=%{buildroot} install
-popd
 
 %check
 %if 0%{?with_check}
